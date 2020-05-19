@@ -142,4 +142,9 @@ class MYBank extends Container
 
         throw new \Exception("Call to undefined method {$method}()");
     }
+
+    public static function verifySignature($params)
+    {
+
+    }
 }

@@ -9,9 +9,7 @@ use Achais\MYBank\Support\Arr;
 use Achais\MYBank\Support\Collection;
 use Achais\MYBank\Support\Log;
 use GuzzleHttp\Middleware;
-use GuzzleHttp\Psr7;
 use Psr\Http\Message\RequestInterface;
-use Psr\Http\Message\ResponseInterface;
 
 abstract class AbstractAPI
 {
