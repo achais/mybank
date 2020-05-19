@@ -11,32 +11,11 @@ use Achais\MYBank\Support\Log;
 
 class Trade extends AbstractAPI
 {
-    const FLAG_CARD_PERSON = '0';
-    const FLAG_CARD_ORGANIZE = '1';
+    const WITHDRAWAL_CARD_PERSON = 'C';//提现对私
+    const WITHDRAWAL_CARD_ORGANIZE = 'B';//提现对公
 
-    const SIGN_TYPE_RSA = 'RSA';
-
-    protected $baseUrl;
-
-    protected $production = false;
-
-    /**
-     * 根据测试环境和生产环境选择 BaseUrl
-     * @return string
-     */
-    private function getBaseUrl()
-    {
-        if (empty($this->baseUrl)) {
-            $this->production = $this->getConfig()->get('instant_pay.production');
-            if ($this->production) {
-                $this->baseUrl = 'https://instantpay.lianlianpay.com';
-            } else {
-                $this->baseUrl = 'https://test.lianlianpay-inc.com';
-            }
-        }
-
-        return $this->baseUrl;
-    }
+    const CARD_TYPE_DEBIT = 'DC';
+    const CARD_TYPE_CREDIT = 'CC';
 
     /**
      * 生产有效的商户订单号(最好排重)
@@ -49,190 +28,222 @@ class Trade extends AbstractAPI
 
 
     /**
-     * 发起一笔付款申请
-     *
-     * @param string $moneyOrder 付款金额保留小数点后2位,单位元
-     * @param string $cardNo 收款方银行账号
-     * @param string $acctName 收款方姓名
-     * @param string $infoOrder 订单描述。说明付款用途，5W以上必传。
-     * @param string $memo 收款备注。 传递至银行， 一般作为订单摘要展示。
-     * @param string $noOrder 商户订单号。
-     * @param string $riskItem 风险控制参数。
-     * @param string $notifyUrl 接收异步通知的线上地址。
-     * @param string $flagCard 对公对私标志。
-     * @param string $bankName 收款银行名称。
-     * @param string $prcptcd 大额行号。 可调用大额行号查询接口进行查询。
-     * @param string $bankCode 银行编码。 flag_card为1时， 建议选择大额行号+银行编码或开户支行名称+开户行所在市编码+银行编码中的一组传入。
-     * @param string $cityCode 开户行所在省市编码， 标准地市编码。
-     * @param string $braBankName 开户支行名称
+     * 交易详情查询
+     * @param null $outerTradeNo
+     * @param string $memo
+     * @return Collection|null
+     * @throws HttpException
+     * @throws InvalidArgumentException
+     */
+    public function infoQuery($outerTradeNo = null, $memo = null)
+    {
+        $service = 'mybank.tc.trade.info.query';
+        if (empty($outerTradeNo)) {
+            //todo:异常处理是否正确 待确认
+            throw new InvalidArgumentException('outerTradeNo不能都为空');
+        }
+        $params = [
+            'service' => $service,
+            "outer_trade_no" => $outerTradeNo,
+            'memo' => $memo,
+        ];
+        return $this->parseJSON(AbstractAPI::POST, $params);
+    }
+
+    /**
+     * 交易流水查询 默认取最近12小时内的流水 时间不能大于12小时
+     * @param string $startDate
+     * @param string $endDate
+     * @param string $memo
      * @return Collection|null
      * @throws HttpException
      */
-    public function payment($moneyOrder, $cardNo, $acctName, $infoOrder, $memo, $noOrder = null, $riskItem = null,
-                            $notifyUrl = null, $flagCard = self::FLAG_CARD_PERSON, $bankName = null, $prcptcd = null,
-                            $bankCode = null, $cityCode = null, $braBankName = null)
+    public function query($startDate = null, $endDate = null, $memo = null)
     {
-        $url = $this->getBaseUrl() . '/paymentapi/payment.htm';
+        $service = 'mybank.tc.trade.query';
         $params = [
-            "oid_partner" => $this->config['instant_pay.oid_partner'],
-            "platform" => $this->config['instant_pay.platform'],
-            "api_version" => $this->production ? '1.1' : '1.0',
-            "sign_type" => self::SIGN_TYPE_RSA,
-            "no_order" => $noOrder ?: $this->findAvailableNoOrder(),
-            "dt_order" => date('YmdHis'),
-            "money_order" => $moneyOrder,
-            "card_no" => $cardNo,
-            "acct_name" => $acctName,
-            "info_order" => $infoOrder,
-            "flag_card" => $flagCard,
-            "memo" => $memo,
-            "notify_url" => $notifyUrl ?: $this->config['instant_pay.notify_url'],
-            "risk_item" => $riskItem,
-            // 以下是对公打款可选参数
-            "bank_name" => $bankName,
-            "prcptcd" => $prcptcd,
-            "bank_code" => $bankCode,
-            "city_code" => $cityCode,
-            "brabank_name" => $braBankName,
+            'service' => $service,
+            'memo' => $memo,
         ];
-
-        $params = $this->buildSignatureParams($params);
-        $params = $this->buildPayLoadParams($params);
-
-        return $this->parseJSON('json', [$url, $params]);
+        if ($startDate == null) {
+            $params['start_time'] = date('YmdHis', strtotime('-12 hours'));
+            $params['end_time'] = date('YmdHis', time());
+        } else {
+            $startTime = strtotime($startDate);
+            $params['start_time'] = date('YmdHis', $startTime);
+            if ($endDate == null) {
+                $params['end_time'] = date('YmdHis', strtotime($startDate . ' +12 hours'));
+            } else {
+                $endTime = strtotime($endDate);
+                $params['end_time'] = date('YmdHis', $endTime);
+            }
+        }
+        return $this->parseJSON(AbstractAPI::POST, $params);
     }
 
     /**
-     * 确认付款 (疑似重复订单需要确认付款)
-     *
-     * @param $noOrder
-     * @param $confirmCode
-     * @param null $notifyUrl
+     * 单笔提现到支付宝
+     * @param string $outerTradeNo
+     * @param string $outerInstOrderNo
+     * @param string $uid
+     * @param float $amount
+     * @param string $alipayNo
+     * @param string $alipayName
+     * @param string $buyFee
+     * @param string $memo
+     * @param string $province
+     * @param string $city
+     * @throws HttpException
+     */
+    public function withdrawalToAlipay($outerTradeNo, $outerInstOrderNo, $uid, $amount,
+                                       $alipayNo, $alipayName,
+                                       $buyFee = null, $memo = null, $province = null, $city = null)
+    {
+        $cardAttribute = self::WITHDRAWAL_CARD_PERSON;
+        $bankCode = 'ALIPAY';
+        $bankName = null;
+        $bankLineNo = null;
+        $bankBranch = null;
+        $cardType = self::CARD_TYPE_DEBIT;
+        self::withdrawalToCard($outerTradeNo, $outerInstOrderNo, $uid, $cardAttribute, $amount,
+            $alipayNo, $alipayName, $bankCode, $bankName, $bankLineNo, $bankBranch,
+            $buyFee = null, $memo = null, $cardType, $province = null, $city = null,
+            $isWebAccess = null, $accountIdentity = null, $productCode = null, $payAttribute = null);
+    }
+
+    /**
+     * 单笔提现到卡对私
+     * @param $outerTradeNo
+     * @param $outerInstOrderNo
+     * @param $uid
+     * @param $amount
+     * @param $bankAccountNo
+     * @param $accountName
+     * @param $bankName
+     * @param string $buyFee
+     * @param string $memo
+     * @param string $province
+     * @param string $city
+     * @throws HttpException
+     */
+    public function withdrawalToCardC($outerTradeNo, $outerInstOrderNo, $uid, $amount,
+                                      $bankAccountNo, $accountName, $bankName,
+                                      $buyFee = null, $memo = null, $province = null, $city = null)
+    {
+        $cardAttribute = self::WITHDRAWAL_CARD_PERSON;
+        $bankCode = null;
+        $bankLineNo = null;
+        $bankBranch = null;
+        $cardType = self::CARD_TYPE_DEBIT;
+        self::withdrawalToCard($outerTradeNo, $outerInstOrderNo, $uid, $cardAttribute, $amount,
+            $bankAccountNo, $accountName, $bankCode, $bankName, $bankLineNo, $bankBranch,
+            $buyFee = null, $memo = null, $cardType, $province = null, $city = null,
+            $isWebAccess = null, $accountIdentity = null, $productCode = null, $payAttribute = null);
+    }
+
+    /**
+     * 单笔提现到卡对公
+     * @param $outerTradeNo
+     * @param $outerInstOrderNo
+     * @param $uid
+     * @param $amount
+     * @param $bankAccountNo
+     * @param $accountName
+     * @param $bankName
+     * @param $bankLineNo
+     * @param $bankBranch
+     * @param string $buyFee
+     * @param string $memo
+     * @param string $province
+     * @param string $city
+     * @throws HttpException
+     */
+    public function withdrawalToCardB($outerTradeNo, $outerInstOrderNo, $uid, $amount,
+                                      $bankAccountNo, $accountName, $bankName,
+                                      $bankLineNo, $bankBranch,
+                                      $buyFee = null, $memo = null, $province = null, $city = null)
+    {
+        $cardAttribute = self::WITHDRAWAL_CARD_ORGANIZE;
+        $bankCode = null;
+        $cardType = self::CARD_TYPE_DEBIT;
+        self::withdrawalToCard($outerTradeNo, $outerInstOrderNo, $uid, $cardAttribute, $amount,
+            $bankAccountNo, $accountName, $bankCode, $bankName, $bankLineNo, $bankBranch,
+            $buyFee = null, $memo = null, $cardType, $province = null, $city = null,
+            $isWebAccess = null, $accountIdentity = null, $productCode = null, $payAttribute = null);
+    }
+
+
+    /**
+     * 单笔提现到卡/支付宝
+     * @param string $outerTradeNo 合作方业务平台订单号
+     * @param string $outerInstOrderNo 外部机构订单号，合作方对接出款渠道使用的提现订单号。若出款渠道是网商银行，则此处填写与outer_trade_no保持一致。
+     * @param string $uid 合作方业务平台用户ID
+     * @param string $cardAttribute 卡属性:C:对私;B:对公
+     * @param float $amount 提现金额。金额必须不大于账户可用余额
+     * @param string $bankAccountNo 提现到银行卡此项为银行卡号；提现到支付宝为支付宝账号
+     * @param string $accountName 户名（银行卡户名或者支付宝户名）
+     * @param string $bankCode 1、提现到银行卡时可空;2、提现到支付宝时必填为ALIPAY
+     * @param string $bankName 银行名称;提现到银行卡不可空；提现到支付宝为空
+     * @param string $bankLineNo 银行分支行号;提现到银行卡时，根据卡属性card_attribute 对公不可空，对私可空；提现到支付宝为空
+     * @param string $bankBranch 支行名称;提现到银行卡时，根据卡属性card_attribute 对公不可空，对私可空；提现到支付宝为空
+     * @param string $buyFee 手费用
+     * @param string $memo 备注
+     * @param string $cardType 卡类型:DC:借记;CC:贷记（信用卡）
+     * @param string $province 省份
+     * @param string $city 城市
+     * @param string $isWebAccess 预留字段，不填
+     * @param string $accountIdentity 预留字段，不填（账户标识）
+     * @param string $productCode 预留字段，不填
+     * @param string $payAttribute 预留字段，不填（卡支付属性):NORMAL普通卡;QPAY快捷
      * @return Collection|null
      * @throws HttpException
      */
-    public function confirmPayment($noOrder, $confirmCode, $notifyUrl = null)
+    private function withdrawalToCard($outerTradeNo, $outerInstOrderNo, $uid, $cardAttribute, $amount,
+                                      $bankAccountNo, $accountName, $bankCode, $bankName, $bankLineNo, $bankBranch,
+                                      $buyFee = null, $memo = null, $cardType = self::CARD_TYPE_DEBIT, $province = null, $city = null,
+                                      $isWebAccess = null, $accountIdentity = null, $productCode = null, $payAttribute = null)
     {
-        $url = $this->getBaseUrl() . '/paymentapi/confirmPayment.htm';
+        $service = 'mybank.tc.trade.withdrawtocard';
+        //todo:平台专属出款渠道编码，该栏位的可选列表由网商银行小二根据平台递交的申请表分配并反馈。
+        //编码规则：出款渠道编码+5位序号。
+        //如：出款渠道为网商，网商分配反馈的编码则可以是MYBANK00097，具体编码以小二反馈信息为准。
+        $whiteChannelCode = 'MYBANK00097';
+        $accountType = 'BASIC';//账户类型,会员提现，暂只支持BASIC
+        //todo:回调地址应该要放在配置文件里面的 记得设置
+        $notify_url = $this->getConfig()->get('tc.notify_url', '');
+
         $params = [
-            "oid_partner" => $this->config['instant_pay.oid_partner'],
-            "platform" => $this->config['instant_pay.platform'],
-            "api_version" => '1.0',
-            "sign_type" => self::SIGN_TYPE_RSA,
-            "no_order" => $noOrder,
-            "confirm_code" => $confirmCode,
-            "notify_url" => $notifyUrl ?: $this->config['instant_pay.notify_url'],
+            //公共参数
+            'service' => $service,
+            'memo' => $memo,
+            //必选参数
+            'outer_trade_no' => $outerTradeNo,
+            'uid' => $uid,
+            'outer_inst_order_no' => $outerInstOrderNo,
+            'white_channel_code' => $whiteChannelCode,
+            'account_type' => $accountType,
+            'bank_account_no' => $bankAccountNo,
+            'account_name' => $accountName,
+            //特定条件可为空
+            'bank_code' => $bankCode,
+            'bank_name' => $bankName,
+            'bank_line_no' => $bankLineNo,
+            'bank_branch' => $bankBranch,
+            'card_type' => $cardType,
+            'card_attribute' => $cardAttribute,
+            'amount' => $amount,
+            'notify_url' => $notify_url,
+            //可空
+            'province' => $province,
+            'city' => $city,
+            'fee_info' => [
+                'buyerFee' => $buyFee,
+            ],
+            'is_web_access' => $isWebAccess,
+            'account_identity' => $accountIdentity,
+            'product_code' => $productCode,
+            'pay_attribute' => $payAttribute,
         ];
-
-        $params = $this->buildSignatureParams($params);
-        $params = $this->buildPayLoadParams($params);
-
-        return $this->parseJSON('json', [$url, $params]);
-    }
-
-    /**
-     * @param null $noOrder
-     * @param null $oidPayBill
-     * @return Collection|null
-     * @throws InvalidArgumentException|HttpException
-     */
-    public function queryPayment($noOrder = null, $oidPayBill = null)
-    {
-        if (empty($noOrder) && empty($oidPayBill)) {
-            throw new InvalidArgumentException('noOrder 和 oidPayBill 不能都为空');
-        }
-
-        $url = $this->getBaseUrl() . '/paymentapi/queryPayment.htm';
-        $params = [
-            "oid_partner" => $this->config['instant_pay.oid_partner'],
-            "sign_type" => self::SIGN_TYPE_RSA,
-            "no_order" => $noOrder,
-            "platform" => $this->config['instant_pay.platform'],
-            "oid_paybill" => $oidPayBill,
-            "api_version" => '1.0',
-        ];
-
-        $params = $this->buildSignatureParams($params);
-
-        return $this->parseJSON('json', [$url, $params]);
-    }
-
-    /**
-     * 验证签名
-     * @param $params
-     * @return bool
-     */
-    public function verifySignature($params)
-    {
-        if (!isset($params['sign'])) {
-            return false;
-        }
-
-        $sign = $params['sign'];
-        unset($params['sign']);
-        $signRaw = $this->httpBuildKSortQuery($params);
-
-        $pubKey = $this->getConfig()->getInstantPayLianLianPublicKey();
-        $res = openssl_get_publickey($pubKey);
-
-        // 调用openssl内置方法验签，返回bool值
-        $result = (bool)openssl_verify($signRaw, base64_decode($sign), $res, OPENSSL_ALGO_MD5);
-
-        Log::debug('Verify Signature Result:', compact('result', 'params'));
-
-        // 释放资源
-        openssl_free_key($res);
-        return $result;
-    }
-
-    private function filterNull($params)
-    {
-        // 过滤空参数
-        $params = Arr::where($params, function ($key, $value) {
-            return !is_null($value);
-        });
-        return $params;
-    }
-
-    private function httpBuildKSortQuery($params)
-    {
-        // 排序
-        ksort($params);
-        return urldecode(http_build_query($params));
-    }
-
-    /**
-     * @param array $params
-     * @return array
-     */
-    private function buildSignatureParams($params)
-    {
-        $params = $this->filterNull($params);
-        $signRaw = $this->httpBuildKSortQuery($params);
-        //转换为openssl密钥，必须是没有经过pkcs8转换的私钥
-        $res = openssl_get_privatekey($this->getConfig()->getInstantPayPrivateKey());
-        //调用openssl内置签名方法，生成签名$sign
-        openssl_sign($signRaw, $signStr, $res, OPENSSL_ALGO_MD5);
-        //释放资源
-        openssl_free_key($res);
-        //base64编码
-        $params['sign'] = base64_encode($signStr);;
-
-        return $params;
-    }
-
-    /**
-     * @param array $params
-     * @return array
-     */
-    private function buildPayLoadParams($params)
-    {
-        Log::debug('Build PayLoad Before:', $params);
-        $oidPartner = $this->getConfig()->get('instant_pay.oid_partner');
-        $payLoad = LLHelper::encryptPayLoad(json_encode($params), $this->getConfig()->getInstantPayLianLianPublicKey());
-        return [
-            'oid_partner' => $oidPartner,
-            'pay_load' => $payLoad
-        ];
+        return $this->parseJSON('post', $params);
     }
 }
