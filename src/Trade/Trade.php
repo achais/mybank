@@ -4,54 +4,33 @@ namespace Achais\MYBank\Trade;
 
 use Achais\MYBank\Core\AbstractAPI;
 use Achais\MYBank\Exceptions\HttpException;
-use Achais\MYBank\Exceptions\InvalidArgumentException;
-use Achais\MYBank\Support\Arr;
 use Achais\MYBank\Support\Collection;
-use Achais\MYBank\Support\Log;
 
 class Trade extends AbstractAPI
 {
-    const WITHDRAWAL_CARD_PERSON = 'C';//提现对私
-    const WITHDRAWAL_CARD_ORGANIZE = 'B';//提现对公
 
-    const CARD_TYPE_DEBIT = 'DC';
-    const CARD_TYPE_CREDIT = 'CC';
+    const WITHDRAWAL_CARD_PERSON = 'C'; // 对私
+    const WITHDRAWAL_CARD_ORGANIZE = 'B'; // 对公
+
+    const CARD_TYPE_DEBIT = 'DC'; // 借记
+    const CARD_TYPE_CREDIT = 'CC'; // 贷记（信用卡）
 
     /**
-     * 生产有效的商户订单号(最好排重)
+     * 生产有效的业务平台订单号(最好排重)
+     *
      * @return string
      */
-    public static function findAvailableNoOrder()
+    public static function findAvailableTradeNo()
     {
         return date('YmdHis') . substr(explode(' ', microtime())[0], 2, 6) . rand(1000, 9999);
     }
 
-
     /**
-     * 交易详情查询
-     * @param null $outerTradeNo
-     * @param string $memo
-     * @return Collection|null
-     * @throws HttpException
-     * @throws InvalidArgumentException
-     */
-    public function infoQuery($outerTradeNo = null, $memo = null)
-    {
-        $service = 'mybank.tc.trade.info.query';
-        if (empty($outerTradeNo)) {
-            //todo:异常处理是否正确 待确认
-            throw new InvalidArgumentException('outerTradeNo不能都为空');
-        }
-        $params = [
-            'service' => $service,
-            "outer_trade_no" => $outerTradeNo,
-            'memo' => $memo,
-        ];
-        return $this->parseJSON(AbstractAPI::POST, $params);
-    }
-
-    /**
-     * 交易流水查询 默认取最近12小时内的流水 时间不能大于12小时
+     * 交易流水查询
+     * https://tc.mybank.cn/open/index/api/api_126.htm
+     *
+     * 默认取最近12小时内的流水 时间不能大于12小时
+     *
      * @param string $startDate
      * @param string $endDate
      * @param string $memo
@@ -78,6 +57,26 @@ class Trade extends AbstractAPI
                 $params['end_time'] = date('YmdHis', $endTime);
             }
         }
+        return $this->parseJSON(AbstractAPI::POST, $params);
+    }
+
+    /**
+     * 交易详情查询
+     * https://tc.mybank.cn/open/index/api/api_127.htm
+     *
+     * @param string $outerTradeNo 业务平台订单号
+     * @param string $memo 备注
+     * @return Collection|null
+     * @throws HttpException
+     */
+    public function infoQuery($outerTradeNo, $memo = null)
+    {
+        $service = 'mybank.tc.trade.info.query';
+        $params = [
+            'service' => $service,
+            "outer_trade_no" => $outerTradeNo,
+            'memo' => $memo,
+        ];
         return $this->parseJSON(AbstractAPI::POST, $params);
     }
 
@@ -113,6 +112,7 @@ class Trade extends AbstractAPI
 
     /**
      * 单笔提现到卡对私
+     *
      * @param $outerTradeNo
      * @param $outerInstOrderNo
      * @param $uid
@@ -143,6 +143,7 @@ class Trade extends AbstractAPI
 
     /**
      * 单笔提现到卡对公
+     *
      * @param $outerTradeNo
      * @param $outerInstOrderNo
      * @param $uid
@@ -164,17 +165,17 @@ class Trade extends AbstractAPI
                                       $buyFee = null, $memo = null, $province = null, $city = null)
     {
         $cardAttribute = self::WITHDRAWAL_CARD_ORGANIZE;
-        $bankCode = null;
         $cardType = self::CARD_TYPE_DEBIT;
         self::withdrawalToCard($outerTradeNo, $outerInstOrderNo, $uid, $cardAttribute, $amount,
-            $bankAccountNo, $accountName, $bankCode, $bankName, $bankLineNo, $bankBranch,
-            $buyFee = null, $memo = null, $cardType, $province = null, $city = null,
+            $bankAccountNo, $accountName, $bankCode = null, $bankName, $bankLineNo, $bankBranch,
+            $buyFee, $memo, $cardType, $province, $city,
             $isWebAccess = null, $accountIdentity = null, $productCode = null, $payAttribute = null);
     }
 
 
     /**
      * 单笔提现到卡/支付宝
+     *
      * @param string $outerTradeNo 合作方业务平台订单号
      * @param string $outerInstOrderNo 外部机构订单号，合作方对接出款渠道使用的提现订单号。若出款渠道是网商银行，则此处填写与outer_trade_no保持一致。
      * @param string $uid 合作方业务平台用户ID
@@ -204,14 +205,6 @@ class Trade extends AbstractAPI
                                       $isWebAccess = null, $accountIdentity = null, $productCode = null, $payAttribute = null)
     {
         $service = 'mybank.tc.trade.withdrawtocard';
-        //todo:平台专属出款渠道编码，该栏位的可选列表由网商银行小二根据平台递交的申请表分配并反馈。
-        //编码规则：出款渠道编码+5位序号。
-        //如：出款渠道为网商，网商分配反馈的编码则可以是MYBANK00097，具体编码以小二反馈信息为准。
-        $whiteChannelCode = 'MYBANK00097';
-        $accountType = 'BASIC';//账户类型,会员提现，暂只支持BASIC
-        //todo:回调地址应该要放在配置文件里面的 记得设置
-        $notify_url = $this->getConfig()->get('tc.notify_url', '');
-
         $params = [
             //公共参数
             'service' => $service,
@@ -220,8 +213,8 @@ class Trade extends AbstractAPI
             'outer_trade_no' => $outerTradeNo,
             'uid' => $uid,
             'outer_inst_order_no' => $outerInstOrderNo,
-            'white_channel_code' => $whiteChannelCode,
-            'account_type' => $accountType,
+            'white_channel_code' => $this->getConfig()->get('tc.white_channel_code'),
+            'account_type' => 'BASIC',
             'bank_account_no' => $bankAccountNo,
             'account_name' => $accountName,
             //特定条件可为空
@@ -232,7 +225,7 @@ class Trade extends AbstractAPI
             'card_type' => $cardType,
             'card_attribute' => $cardAttribute,
             'amount' => $amount,
-            'notify_url' => $notify_url,
+            'notify_url' => $this->getConfig()->get('tc.notify_url'),
             //可空
             'province' => $province,
             'city' => $city,
