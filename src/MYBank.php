@@ -3,6 +3,7 @@
 namespace Achais\MYBank;
 
 use Achais\MYBank\Core\Http;
+use Achais\MYBank\Support\Arr;
 use Achais\MYBank\Support\Log;
 use Achais\MYBank\Trade\Trade;
 use Achais\MYBank\User\User;
@@ -143,8 +144,39 @@ class MYBank extends Container
         throw new \Exception("Call to undefined method {$method}()");
     }
 
-    public static function verifySignature($params)
+    /**
+     * 验证签名
+     * @param $params
+     * @return bool
+     */
+    public function verifySignature($params)
     {
+        if (!isset($params['sign']) || !isset($params['sign_type'])) {
+            return false;
+        }
 
+        $sign = $params['sign'];
+        unset($params['sign']);
+        unset($params['sign_type']);
+        $signRaw = $this->httpBuildKSortQuery($params);
+
+        $pubKey = $this['config']->getMYBankPublicKey();
+        $res = openssl_get_publickey($pubKey);
+
+        // 调用openssl内置方法验签，返回bool值
+        $result = (bool)openssl_verify($signRaw, base64_decode($sign), $res);
+
+        Log::debug('Verify Signature Result:', compact('result', 'params'));
+
+        // 释放资源
+        openssl_free_key($res);
+        return $result;
+    }
+
+    private function httpBuildKSortQuery($params)
+    {
+        // 排序
+        ksort($params);
+        return urldecode(http_build_query($params));
     }
 }
