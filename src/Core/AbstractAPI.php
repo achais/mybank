@@ -9,9 +9,7 @@ use Achais\MYBank\Support\Arr;
 use Achais\MYBank\Support\Collection;
 use Achais\MYBank\Support\Log;
 use GuzzleHttp\Middleware;
-use GuzzleHttp\Psr7;
 use Psr\Http\Message\RequestInterface;
-use Psr\Http\Message\ResponseInterface;
 
 abstract class AbstractAPI
 {
@@ -155,6 +153,31 @@ abstract class AbstractAPI
         return (new Collection($contents));
     }
 
+    /**
+     * mybank验签
+     * @param $params
+     * @return bool
+     */
+    public function verifySignature($params)
+    {
+        if (!isset($params['sign']) || !isset($params['sign_type'])) {
+            return false;
+        }
+        $sign = $params['sign'];
+        $signType = $params['sign_type'];
+        unset($params['sign'], $params['sign_type']);
+
+        $params = $this->filterNull($params);
+        $signRaw = $this->httpBuildKSortQuery($params);
+
+        if ($signType === 'RSA') {
+            return $this->rsaCheckSign($signRaw, $sign);
+        } else {
+            //签名方式有误
+            return false;
+        }
+    }
+
     private function buildSignatureParams($params)
     {
         //排除空参数
@@ -203,6 +226,40 @@ abstract class AbstractAPI
         }
 
         return $string;
+    }
+
+    /**
+     * rsa验签
+     * @param $signRaw
+     * @param $sign
+     * @return bool
+     */
+    private function rsaCheckSign($signRaw, $sign)
+    {
+        $pubKey = $this->getMyBankPublicKey();
+        $res = openssl_get_publickey($pubKey);
+
+        // 调用openssl内置方法验签，返回bool值
+        $result = (bool)openssl_verify($signRaw, base64_decode($sign), $res);
+
+        Log::debug('Verify Signature:', [$result], $params);
+
+        // 释放资源
+        openssl_free_key($res);
+        return $result;
+    }
+
+    /**
+     * 获取公钥
+     * @return string
+     */
+    private function getMyBankPublicKey()
+    {
+        return <<<s
+-----BEGIN PUBLIC KEY-----
+{$this->getConfig()->get('tc.public_key')}
+-----END PUBLIC KEY-----
+s;
     }
 
     /**
