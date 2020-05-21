@@ -2,6 +2,7 @@
 
 namespace Achais\MYBank;
 
+use Achais\MYBank\Core\AbstractAPI;
 use Achais\MYBank\Core\Http;
 use Achais\MYBank\Support\Log;
 use Achais\MYBank\Trade\Trade;
@@ -141,5 +142,15 @@ class MYBank extends Container
         }
 
         throw new \Exception("Call to undefined method {$method}()");
+    }
+
+    /**
+     * 验签
+     * @param $params
+     * @return bool
+     */
+    public static function verifySignature($params)
+    {
+        return AbstractAPI::verifySignature($params);
     }
 }
