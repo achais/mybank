@@ -155,6 +155,10 @@ class MYBank extends Container
             return false;
         }
 
+        if ($params['sign_type'] !== 'RSA') {
+            return false;
+        }
+
         $sign = $params['sign'];
         unset($params['sign']);
         unset($params['sign_type']);
