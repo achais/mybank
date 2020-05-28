@@ -93,6 +93,7 @@ class Trade extends AbstractAPI
      * @param string $province
      * @param string $city
      * @throws HttpException
+     * @return Collection|null
      */
     public function withdrawalToAlipay($outerTradeNo, $outerInstOrderNo, $uid, $amount,
                                        $alipayNo, $alipayName,
@@ -104,7 +105,7 @@ class Trade extends AbstractAPI
         $bankLineNo = null;
         $bankBranch = null;
         $cardType = self::CARD_TYPE_DEBIT;
-        self::withdrawalToCard($outerTradeNo, $outerInstOrderNo, $uid, $cardAttribute, $amount,
+        return self::withdrawalToCard($outerTradeNo, $outerInstOrderNo, $uid, $cardAttribute, $amount,
             $alipayNo, $alipayName, $bankCode, $bankName, $bankLineNo, $bankBranch,
             $buyFee = null, $memo = null, $cardType, $province = null, $city = null,
             $isWebAccess = null, $accountIdentity = null, $productCode = null, $payAttribute = null);
@@ -125,8 +126,9 @@ class Trade extends AbstractAPI
      * @param string $province
      * @param string $city
      * @throws HttpException
+     * @return Collection|null
      */
-    public function withdrawalToCardC($outerTradeNo, $outerInstOrderNo, $uid, $amount,
+    public function withdrawalToCardPerson($outerTradeNo, $outerInstOrderNo, $uid, $amount,
                                       $bankAccountNo, $accountName, $bankName,
                                       $buyFee = null, $memo = null, $province = null, $city = null)
     {
@@ -135,7 +137,7 @@ class Trade extends AbstractAPI
         $bankLineNo = null;
         $bankBranch = null;
         $cardType = self::CARD_TYPE_DEBIT;
-        self::withdrawalToCard($outerTradeNo, $outerInstOrderNo, $uid, $cardAttribute, $amount,
+        return self::withdrawalToCard($outerTradeNo, $outerInstOrderNo, $uid, $cardAttribute, $amount,
             $bankAccountNo, $accountName, $bankCode, $bankName, $bankLineNo, $bankBranch,
             $buyFee = null, $memo = null, $cardType, $province = null, $city = null,
             $isWebAccess = null, $accountIdentity = null, $productCode = null, $payAttribute = null);
@@ -158,15 +160,16 @@ class Trade extends AbstractAPI
      * @param string $province
      * @param string $city
      * @throws HttpException
+     * @return Collection|null
      */
-    public function withdrawalToCardB($outerTradeNo, $outerInstOrderNo, $uid, $amount,
+    public function withdrawalToCardOrganize($outerTradeNo, $outerInstOrderNo, $uid, $amount,
                                       $bankAccountNo, $accountName, $bankName,
                                       $bankLineNo, $bankBranch,
                                       $buyFee = null, $memo = null, $province = null, $city = null)
     {
         $cardAttribute = self::WITHDRAWAL_CARD_ORGANIZE;
         $cardType = self::CARD_TYPE_DEBIT;
-        self::withdrawalToCard($outerTradeNo, $outerInstOrderNo, $uid, $cardAttribute, $amount,
+        return self::withdrawalToCard($outerTradeNo, $outerInstOrderNo, $uid, $cardAttribute, $amount,
             $bankAccountNo, $accountName, $bankCode = null, $bankName, $bankLineNo, $bankBranch,
             $buyFee, $memo, $cardType, $province, $city,
             $isWebAccess = null, $accountIdentity = null, $productCode = null, $payAttribute = null);
