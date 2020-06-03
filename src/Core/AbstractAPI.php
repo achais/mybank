@@ -114,7 +114,7 @@ abstract class AbstractAPI
     {
         $production = $this->getConfig()->get('production');
         if ($production) {
-            return 'http://test.tc.mybank.cn/gop/gateway.do';
+            return 'https://tc.mybank.cn/gop/gateway.do';
         } else {
             return 'http://test.tc.mybank.cn/gop/gateway.do';
         }
