@@ -112,7 +112,7 @@ abstract class AbstractAPI
 
     public function getBaseUrl()
     {
-        $production = $this->getConfig()->get('production');
+        $production = $this->getConfig()->get('tc.production');
         if ($production) {
             return 'https://tc.mybank.cn/gop/gateway.do';
         } else {
