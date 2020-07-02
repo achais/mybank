@@ -57,7 +57,7 @@ class Trade extends AbstractAPI
                 $params['end_time'] = date('YmdHis', $endTime);
             }
         }
-        return $this->parseJSON(AbstractAPI::POST, $params);
+        return $this->parseJSON('post', $params);
     }
 
     /**
@@ -77,7 +77,7 @@ class Trade extends AbstractAPI
             "outer_trade_no" => $outerTradeNo,
             'memo' => $memo,
         ];
-        return $this->parseJSON(AbstractAPI::POST, $params);
+        return $this->parseJSON('post', $params);
     }
 
     /**
@@ -239,6 +239,43 @@ class Trade extends AbstractAPI
             'account_identity' => $accountIdentity,
             'product_code' => $productCode,
             'pay_attribute' => $payAttribute,
+        ];
+        return $this->parseJSON('post', $params);
+    }
+
+    /**
+     * 平台可调用该接口实现订单交易，合作方业务平台的买家在业务平台选择商品下单，付款成功后款项直接结算给卖家账户，业务平台交易成功后，将成功的交易同步给交易见证平台。
+     *
+     * @param string $outerTradeNo 合作方业务平台订单号
+     * @param string $buyerId 买家在业务平台的ID（UID）
+     * @param string $payMethod 支付方式，格式为Json，具体说明见下方接口参数补充说明。
+     * @param string $subject 商品的标题/交易标题/订单标题/订单关键字等。
+     * @param float $price 商品单价。单位为：RMB Yuan。取值范围为[0.01，1000000.00]，精确到小数点后两位。
+     * @param int $quantity 商品的数量。
+     * @param float $totalAmount 交易金额=（商品单价×商品数量）。卖家实际扣款和卖家实际收款金额计算规则请参考接口参数补充说明。
+     * @param string $sellerId 卖家在业务平台的用户ID（UID）
+     * @param string $accountType 卖家账户类型
+     * @param null $memo
+     * @return Collection|null
+     * @throws HttpException
+     */
+    public function payInstant($outerTradeNo, $buyerId, $payMethod, $subject, $price, $quantity, $totalAmount, $sellerId,
+                               $accountType, $memo = null)
+    {
+        $service = 'mybank.tc.trade.pay.instant';
+        $params = [
+            'service' => $service,
+            "outer_trade_no" => $outerTradeNo,
+            "buyer_id" => $buyerId,
+            "pay_method" => $payMethod,
+            "subject" => $subject,
+            "price" => $price,
+            "quantity" => $quantity,
+            "total_amount" => $totalAmount,
+            "seller_id" => $sellerId,
+            "account_type" => $accountType,
+            'notify_url' => $this->getConfig()->get('tc.notify_url'),
+            'memo' => $memo,
         ];
         return $this->parseJSON('post', $params);
     }
