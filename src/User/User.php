@@ -315,4 +315,32 @@ class User extends AbstractAPI
         return $this->parseJSON('post', $params);
     }
 
+    /**
+     * 绑定支付宝
+     *
+     * @param string $uid 合作方业务平台用户ID
+     * @param string $accountNo 支付宝账号，明文
+     * @param string $accountName 支付宝对应的真实姓名，明文
+     * @param string $certificateNo 身份证号
+     * @param string|null $mobileNo 预留手机号
+     * @param string|null $isVerify 是否认证支付宝账号有效性 Y:是 N:否
+     * @return Collection|null
+     * @throws HttpException
+     */
+    public function aliPayBind($uid, $accountNo, $accountName, $certificateNo, $mobileNo = null, $isVerify = null)
+    {
+        $service = 'mybank.tc.user.alipay.bind';
+        $params = [
+            'service' => $service,
+            'uid' => $uid,
+            'account_no' => $accountNo,
+            'account_name' => $accountName,
+            'certificate_no' => $certificateNo,
+            'mobile_no' => $mobileNo,
+            'is_verify' => in_array($isVerify, ['Y', 'N']) ? $isVerify : null
+        ];
+
+        return $this->parseJSON('post', $params);
+    }
+
 }

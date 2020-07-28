@@ -95,7 +95,7 @@ class Trade extends AbstractAPI
      * @throws HttpException
      * @return Collection|null
      */
-    public function withdrawalToAlipay($outerTradeNo, $outerInstOrderNo, $uid, $amount,
+    public function withdrawalToAliPay($outerTradeNo, $outerInstOrderNo, $uid, $amount,
                                        $alipayNo, $alipayName,
                                        $buyFee = null, $memo = null, $province = null, $city = null)
     {
