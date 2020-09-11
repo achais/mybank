@@ -223,7 +223,11 @@ abstract class AbstractAPI
             //创建目录
             $date = date('Ymd', time());
             if (!is_dir(sys_get_temp_dir() . "/{$date}/")) {
-                mkdir(sys_get_temp_dir() . "/{$date}/");
+                try {
+                    mkdir(sys_get_temp_dir() . "/{$date}/");
+                } catch (\Exception $exception) {
+                    Log::error($exception);
+                }
             }
 
             //需要签名的文件
