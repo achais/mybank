@@ -17,11 +17,21 @@ $ composer require achais/mybank:dev-master -vvv
 use Achais\MYBank\MYBank;
 
 $config = [
-    'debug' => true, // 开启调试
+    'debug' => true,
+    'production' => env('MYBANK_TC_PRODUCTION', false),
 
-    // 实时付款参数
-    'mybank' => [
-    
+    'tc' => [
+        'partner_id' => env('MYBANK_TC_PARTNER_ID'),
+        'cert_path' => env('MYBANK_TC_CERT_PATH'),
+        'cert_password' => env('MYBANK_TC_CERT_PASSWORD'),
+        'notify_url' => env('MYBANK_TC_NOTIFY_URL', 'http://localhost/'),
+
+        'mybank_public_key' => env('MYBANK_TC_PUBLIC_KEY'),
+        'white_channel_code' => env('MYBANK_TC_WHITE_CHANNEL_CODE'),
+
+        'version' => env('MYBANK_TC_VERSION', '2.1'),
+        'charset' => env('MYBANK_TC_CHARSET', 'utf-8'),
+        'production' => env('MYBANK_TC_PRODUCTION', false),
     ],
 
     // 日志
