@@ -41,7 +41,7 @@ class MYBank extends Container
         $this->registerProviders();
         $this->initializeLogger();
 
-        Http::setDefaultOptions($this['config']->get('guzzle', ['timeout' => 5.0]));
+        Http::setDefaultOptions($this['config']->get('guzzle', ['timeout' => 60.0]));
 
         $this->logConfiguration($config);
     }
